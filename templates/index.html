@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Recipe Generator - Your Personal AI Chef</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: white;
+            padding: 15px 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #667eea;
+        }
+
+        .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white !important;
+            padding: 8px 20px;
+            border-radius: 25px;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 80px 20px;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto 30px;
+            opacity: 0.9;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+            padding: 12px 30px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.3s;
+            display: inline-block;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+        }
+
+        .btn-outline {
+            border: 2px solid white;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .btn-outline:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        /* Features Grid */
+        .features {
+            background: white;
+            padding: 60px 50px;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 40px;
+            color: #333;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: #f8f9fc;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .feature-card h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .feature-card p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .feature-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* Chat Container */
+        .chat-container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fc;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-message {
+            justify-content: flex-end;
+        }
+
+        .bot-message {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 20px;
+            word-wrap: break-word;
+        }
+
+        .user-message .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .bot-message .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .recipe-image {
+            width: 100%;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .input-area input:focus {
+            border-color: #667eea;
+        }
+
+        .input-area button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+        }
+
+        .quick-actions {
+            padding: 15px 20px;
+            background: white;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .quick-btn {
+            background: #f0f0f0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px 15px;
+            background: white;
+            border-radius: 20px;
+            width: fit-content;
+            margin-bottom: 20px;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .cta-section h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        /* Footer */
+        .footer {
+            background: #1a1a2e;
+            color: white;
+            padding: 50px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-section h4 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .footer-section a {
+            display: block;
+            color: #ccc;
+            text-decoration: none;
+            margin-bottom: 8px;
+        }
+
+        .footer-section a:hover {
+            color: #667eea;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 30px;
+            margin-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 15px 20px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .hero h1 {
+                font-size: 2rem;
+            }
+            .features {
+                padding: 40px 20px;
+            }
+            .footer {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🍳 AI Recipe Generator</div>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/login">Recipes</a>
+            <a href="/login">About</a>
+            <a href="/login" class="login-btn">Login</a>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <h1>Your Personal AI Chef</h1>
+        <p>Tell me what ingredients you have, and I'll create a delicious recipe for you — with real dish photos!</p>
+        <div class="hero-buttons">
+            <a href="/signup" class="btn-primary">Get Started Free →</a>
+            <a href="/login" class="btn-outline">Explore Recipes</a>
+        </div>
+    </div>
+
+    <div class="features">
+        <h2 class="section-title">What I Can Do For You</h2>
+        <div class="features-grid">
+            <div class="feature-card" onclick="window.location.href='/login'">
+                <div class="feature-icon">🍳</div>
+                <h3>Recipe Generator</h3>
+                <p>Enter any ingredients and get a complete recipe with cooking instructions.</p>
+                <button class="feature-btn">Generate Recipe →</button>
+            </div>
+
+            <div class="feature-card" onclick="window.location.href='/login'">
+                <div class="feature-icon">📸</div>
+                <h3>Real Dish Photos</h3>
+                <p>Get beautiful, high-quality images of your dish along with the recipe.</p>
+                <button class="feature-btn">View Photos →</button>
+            </div>
+
+            <div class="feature-card" onclick="window.location.href='/login'">
+                <div class="feature-icon">📜</div>
+                <h3>Chat History</h3>
+                <p>All your recipes are saved. Access them anytime from your history.</p>
+                <button class="feature-btn">View History →</button>
+            </div>
+
+            <div class="feature-card" onclick="window.location.href='/login'">
+                <div class="feature-icon">💡</div>
+                <h3>Recipe Ideas</h3>
+                <p>Not sure what to cook? Get AI-powered recipe suggestions.</p>
+                <button class="feature-btn">Get Ideas →</button>
+            </div>
+
+            <div class="feature-card" onclick="window.location.href='/login'">
+                <div class="feature-icon">⚡</div>
+                <h3>Quick Actions</h3>
+                <p>One-click access to popular recipes like Dosa, Pasta, Biryani & more.</p>
+                <button class="feature-btn">Try Now →</button>
+            </div>
+
+            <div class="feature-card" onclick="window.location.href='/login'">
+                <div class="feature-icon">🔐</div>
+                <h3>Personal Account</h3>
+                <p>Login with Google or email to save your recipes and preferences.</p>
+                <button class="feature-btn">Sign Up →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Chat Demo -->
+    <div class="chat-container">
+        <div class="chat-header">
+            <h3>🍳 Try Recipe Generator</h3>
+            <p>Type any dish name or ingredients below</p>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                <div class="message-content">
+                    👋 Hi! I'm RecipeBot, your personal AI chef!<br><br>
+                    Try: "plain dosa", "butter chicken", or "simple pasta"
+                </div>
+            </div>
+        </div>
+        <div class="quick-actions">
+            <div class="quick-btn" onclick="quickAction('plain dosa')">🥞 Plain Dosa</div>
+            <div class="quick-btn" onclick="quickAction('butter chicken')">🍛 Butter Chicken</div>
+            <div class="quick-btn" onclick="quickAction('simple pasta')">🍝 Simple Pasta</div>
+            <div class="quick-btn" onclick="quickAction('chicken biryani')">🍚 Biryani</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Type dish name or ingredients..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Generate 🚀</button>
+        </div>
+    </div>
+
+    <div class="cta-section">
+        <h2>Turn your ingredients into delicious meals today!</h2>
+        <br>
+        <a href="/signup" class="btn-primary" style="background: white; color: #667eea;">Get Started Free →</a>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>QUICK LINKS</h4>
+                <a href="/">Home</a>
+                <a href="/login">Recipes</a>
+                <a href="/login">Popular Dishes</a>
+                <a href="/login">About Us</a>
+            </div>
+            <div class="footer-section">
+                <h4>SERVICES</h4>
+                <a href="/login">Recipe Generator</a>
+                <a href="/login">Ingredient Search</a>
+                <a href="/login">Dish Photos</a>
+                <a href="/login">Recipe History</a>
+            </div>
+            <div class="footer-section">
+                <h4>CONTACT</h4>
+                <p>📧 support@recipeai.com</p>
+                <p>📍 Tech Hub, India</p>
+                <p>© 2024 AI Recipe Generator</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>Created with ❤️ by Divyanshu Rawat | Powered by Groq AI + Pexels API</p>
+        </div>
+    </footer>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') sendMessage();
+        }
+        
+        function quickAction(dish) {
+            document.getElementById('userInput').value = dish;
+            sendMessage();
+        }
+        
+        function formatRecipe(text) {
+            let html = '';
+            const lines = text.split('\n');
+            let inList = false;
+            let listType = '';
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (line === '') {
+                    if (inList) {
+                        html += listType === 'ol' ? '</ol>' : '</ul>';
+                        inList = false;
+                    }
+                    continue;
+                }
+                
+                if (line.toLowerCase().startsWith('recipe name:')) {
+                    if (inList) {
+                        html += listType === 'ol' ? '</ol>' : '</ul>';
+                        inList = false;
+                    }
+                    const name = line.replace('Recipe Name:', '').trim();
+                    html += `<h3>🍽️ ${name}</h3>`;
+                }
+                else if (line.toLowerCase().startsWith('ingredients:')) {
+                    if (inList) html += listType === 'ol' ? '</ol>' : '</ul>';
+                    html += `<h4>📝 ${line}</h4><ul>`;
+                    inList = true;
+                    listType = 'ul';
+                }
+                else if (line.toLowerCase().startsWith('instructions:')) {
+                    if (inList) html += listType === 'ol' ? '</ol>' : '</ul>';
+                    html += `<h4>👨‍🍳 ${line}</h4><ol>`;
+                    inList = true;
+                    listType = 'ol';
+                }
+                else if (line.toLowerCase().startsWith('tips:')) {
+                    if (inList) html += listType === 'ol' ? '</ol>' : '</ul>';
+                    inList = false;
+                    html += `<h4>💡 ${line}</h4>`;
+                }
+                else if (line.startsWith('-') || line.startsWith('•')) {
+                    html += `<li>${line.substring(1).trim()}</li>`;
+                }
+                else if (line.match(/^\d+\./)) {
+                    html += `<li>${line.replace(/^\d+\./, '').trim()}</li>`;
+                }
+                else if (inList) {
+                    html += `<li>${line}</li>`;
+                }
+                else {
+                    if (inList) {
+                        html += listType === 'ol' ? '</ol>' : '</ul>';
+                        inList = false;
+                    }
+                    html += `<p>${line}</p>`;
+                }
+            }
+            
+            if (inList) {
+                html += listType === 'ol' ? '</ol>' : '</ul>';
+            }
+            
+            return html;
+        }
+        
+        function addMessage(content, isUser, imageUrl = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            if (!isUser && imageUrl && imageUrl !== 'null') {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.className = 'recipe-image';
+                img.style.maxWidth = '100%';
+                img.style.borderRadius = '10px';
+                img.onclick = () => window.open(imageUrl, '_blank');
+                contentDiv.appendChild(img);
+            }
+            
+            if (!isUser && content.includes('Recipe Name:')) {
+                contentDiv.innerHTML += formatRecipe(content);
+            } else {
+                contentDiv.innerHTML += content.replace(/\n/g, '<br>');
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function showTyping() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'typing-indicator';
+            typingDiv.id = 'typingIndicator';
+            typingDiv.innerHTML = '<span></span><span></span><span></span>';
+            typingDiv.style.display = 'block';
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function hideTyping() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) indicator.remove();
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            
+            if (!message) {
+                addMessage("Please enter a dish name or ingredients! 🍳", false);
+                return;
+            }
+            
+            addMessage(message, true);
+            input.value = '';
+            showTyping();
+            
+            try {
+                const response = await fetch('/get_recipe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ingredients: message })
+                });
+                
+                const data = await response.json();
+                hideTyping();
+                
+                if (data.success) {
+                    addMessage(data.recipe, false, data.image_url);
+                } else if (data.redirect) {
+                    window.location.href = '/login';
+                } else {
+                    addMessage(`❌ ${data.error || 'Please login to continue!'}`, false);
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('❌ Please login to use the recipe generator!', false);
+            }
+        }
+    </script>
+</body>
+</html>
