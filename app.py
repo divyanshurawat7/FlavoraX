@@ -20,6 +20,8 @@ CORS(app, supports_credentials=True)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -32,72 +34,15 @@ GROQ_FALLBACK_MODELS = [
 
 LANGUAGES = {
     "english": {
-        "name": "English",
-        "code": "en",
-        "voice_lang": "en-US",
-        "system_prompt": "Respond in English only.",
-        "labels": {
-            "recipe_name": "Recipe Name",
-            "ingredients": "Ingredients",
-            "instructions": "Instructions",
-            "chef_tip": "Chef's Tip",
-            "cooking_time": "Cooking Time",
-            "servings": "Servings"
-        }
+        "name": "English"
     },
     "hindi": {
-        "name": "हिन्दी",
-        "code": "hi",
-        "voice_lang": "hi-IN",
-        "system_prompt": "Respond in Hindi only using Devanagari script.",
-        "labels": {
-            "recipe_name": "रेसिपी का नाम",
-            "ingredients": "सामग्री",
-            "instructions": "विधि",
-            "chef_tip": "शेफ की सलाह",
-            "cooking_time": "पकाने का समय",
-            "servings": "सर्विंग्स"
-        }
+        "name": "हिन्दी"
     }
-}
-
-LANGUAGE_EXAMPLES = {
-    "english": {
-        "ingredient_1": "1 cup rice",
-        "ingredient_2": "1 tsp salt",
-        "step_1": "Wash ingredients.",
-        "step_2": "Cook well.",
-        "tip": "Use fresh ingredients.",
-        "time": "25 minutes",
-        "servings": "2 people",
-        "script_rule": "Use English only."
-    },
-    "hindi": {
-        "ingredient_1": "1 कप चावल",
-        "ingredient_2": "1 छोटा चम्मच नमक",
-        "step_1": "सामग्री धो लें।",
-        "step_2": "अच्छी तरह पकाएं।",
-        "tip": "ताजी सामग्री इस्तेमाल करें।",
-        "time": "25 मिनट",
-        "servings": "2 लोग",
-        "script_rule": "Use only Devanagari script."
-    }
-}
-
-SCRIPT_RANGES = {
-    "hindi": r"[\u0900-\u097F]"
 }
 
 def normalize_lang_code(lang):
     return lang if lang in LANGUAGES else "english"
-
-def uses_expected_script(text, lang):
-    if lang == "english":
-        return True
-    pattern = SCRIPT_RANGES.get(lang)
-    if not pattern:
-        return True
-    return len(re.findall(pattern, text or "")) > 10
 
 def parse_json_object(text):
     try:
@@ -115,9 +60,15 @@ def groq_text(prompt, system_prompt=None, json_mode=False):
     messages = []
 
     if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
+        messages.append({
+            "role": "system",
+            "content": system_prompt
+        })
 
-    messages.append({"role": "user", "content": prompt})
+    messages.append({
+        "role": "user",
+        "content": prompt
+    })
 
     last_error = None
 
@@ -125,12 +76,14 @@ def groq_text(prompt, system_prompt=None, json_mode=False):
         try:
             kwargs = {
                 "model": model,
-                "temperature": 0.3,
+                "temperature": 0.4,
                 "messages": messages
             }
 
             if json_mode:
-                kwargs["response_format"] = {"type": "json_object"}
+                kwargs["response_format"] = {
+                    "type": "json_object"
+                }
 
             res = client.chat.completions.create(**kwargs)
             return res.choices[0].message.content
@@ -139,41 +92,6 @@ def groq_text(prompt, system_prompt=None, json_mode=False):
             last_error = e
 
     raise last_error
-
-def recipe_from_structured(data, lang):
-    labels = lang["labels"]
-
-    ingredients = data.get("ingredients", [])
-    instructions = data.get("instructions", [])
-
-    if not isinstance(ingredients, list):
-        ingredients = [ingredients]
-
-    if not isinstance(instructions, list):
-        instructions = [instructions]
-
-    lines = [
-        f"{labels['recipe_name']}: {data.get('title','')}",
-        "",
-        f"{labels['ingredients']}:"
-    ]
-
-    for i in ingredients:
-        lines.append(f"- {i}")
-
-    lines.append("")
-    lines.append(f"{labels['instructions']}:")
-
-    for idx, step in enumerate(instructions, 1):
-        lines.append(f"{idx}. {step}")
-
-    lines.append("")
-    lines.append(f"{labels['chef_tip']}: {data.get('chef_tip','')}")
-    lines.append("")
-    lines.append(f"{labels['cooking_time']}: {data.get('cooking_time','')}")
-    lines.append(f"{labels['servings']}: {data.get('servings','')}")
-
-    return "\n".join(lines)
 
 def clean_dish_query(name):
     dish = re.sub(r"[^a-zA-Z0-9\s-]", " ", name or "").lower()
@@ -212,103 +130,126 @@ def get_dish_image(name):
     except:
         return None
 
+# ---------------- HOME ----------------
+
 @app.route("/")
 def home():
-    if "user" not in session:
-        session["user"] = {
-            "email": "guest@flavorax.local",
-            "name": "Guest Chef",
-            "picture": ""
-        }
-        session["language"] = "english"
+    if "user" in session:
+        return render_template("index.html")
 
-    return render_template("index.html")
+    return render_template(
+        "login.html",
+        google_client_id=GOOGLE_CLIENT_ID
+    )
+
+# ---------------- LOGIN ----------------
 
 @app.route("/login")
 def login_page():
-    return redirect(url_for("home"))
+    return render_template(
+        "login.html",
+        google_client_id=GOOGLE_CLIENT_ID
+    )
+
+# ---------------- GOOGLE LOGIN ----------------
+
+@app.route("/google_client_login", methods=["POST"])
+def google_client_login():
+    try:
+        data = request.get_json()
+
+        session["user"] = {
+            "email": data.get("email"),
+            "name": data.get("name"),
+            "picture": data.get("picture", "")
+        }
+
+        session["language"] = "english"
+
+        return jsonify({
+            "success": True
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
+
+# ---------------- CHECK SESSION ----------------
+
+@app.route("/check_session")
+def check_session():
+    if "user" in session:
+        return jsonify({
+            "logged_in": True,
+            "user": session["user"]["name"],
+            "email": session["user"]["email"],
+            "picture": session["user"]["picture"],
+            "language": session.get("language", "english")
+        })
+
+    return jsonify({
+        "logged_in": False
+    })
+
+# ---------------- LOGOUT ----------------
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("home"))
+    return redirect("/")
 
-@app.route("/check_session")
-def check_session():
-    if "user" not in session:
-        session["user"] = {
-            "email": "guest@flavorax.local",
-            "name": "Guest Chef",
-            "picture": ""
-        }
-
-    return jsonify({
-        "logged_in": True,
-        "user": session["user"]["name"],
-        "email": session["user"]["email"],
-        "language": session.get("language", "english")
-    })
+# ---------------- LANGUAGE ----------------
 
 @app.route("/set_language", methods=["POST"])
 def set_language():
     data = request.get_json()
     lang = normalize_lang_code(data.get("language", "english"))
     session["language"] = lang
-    return jsonify({"success": True})
+
+    return jsonify({
+        "success": True
+    })
+
+# ---------------- RECIPE ----------------
 
 @app.route("/get_recipe", methods=["POST"])
 def get_recipe():
     try:
         data = request.get_json()
 
-        user_input = data.get("ingredients", "").strip()
+        dish = data.get("ingredients", "").strip()
 
-        if not user_input:
+        if not dish:
             return jsonify({
                 "success": False,
                 "error": "Please enter dish name"
             })
 
-        lang_code = normalize_lang_code(
+        lang = normalize_lang_code(
             data.get("language") or session.get("language", "english")
         )
 
-        lang = LANGUAGES[lang_code]
-        examples = LANGUAGE_EXAMPLES[lang_code]
-
         prompt = f"""
-Create recipe for {user_input} in {lang['name']}.
+Give full recipe for {dish} in {LANGUAGES[lang]['name']} language.
 
-Return JSON:
-{{
-"title":"...",
-"ingredients":["...","..."],
-"instructions":["...","..."],
-"chef_tip":"...",
-"cooking_time":"...",
-"servings":"..."
-}}
-
-{examples['script_rule']}
+Include:
+1. Recipe Name
+2. Ingredients
+3. Instructions
+4. Cooking Time
+5. Servings
+6. Chef Tip
 """
 
-        system = f"You are chef AI. Return strict JSON only."
-
-        raw = groq_text(prompt, system, True)
-
-        structured = parse_json_object(raw)
-
-        if structured:
-            recipe = recipe_from_structured(structured, lang)
-        else:
-            recipe = raw
-
-        image = get_dish_image(user_input)
+        recipe = groq_text(prompt, "You are a professional chef AI.")
+        image = get_dish_image(dish)
 
         return jsonify({
             "success": True,
+            "dish_name": dish,
             "recipe": recipe,
-            "dish_name": user_input,
             "image_url": image
         })
 
@@ -318,6 +259,8 @@ Return JSON:
             "error": str(e)
         })
 
+# ---------------- CHAT ----------------
+
 @app.route("/chat_with_recipe", methods=["POST"])
 def chat_with_recipe():
     try:
@@ -325,21 +268,18 @@ def chat_with_recipe():
 
         msg = data.get("message", "")
         recipe = data.get("recipe", "")
-
-        lang_code = normalize_lang_code(
+        lang = normalize_lang_code(
             data.get("language") or session.get("language", "english")
         )
 
-        lang = LANGUAGES[lang_code]
-
         prompt = f"""
 Recipe:
-{recipe[:700]}
+{recipe}
 
-User question:
+User Question:
 {msg}
 
-Reply in {lang['name']}.
+Reply in {LANGUAGES[lang]['name']}.
 """
 
         reply = groq_text(prompt)
@@ -354,6 +294,8 @@ Reply in {lang['name']}.
             "success": False,
             "error": str(e)
         })
+
+# ---------------- RUN ----------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
