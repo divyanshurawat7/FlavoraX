@@ -12,23 +12,30 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "flavorax-secret-key-2024")
-app.config['SESSION_COOKIE_SECURE'] = False  # Render HTTP ke liye
+app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app)
 
-# ============ API INIT ============
+# ============ API INITIALIZATION ============
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# Agar API key nahi hai to error mat do, baad me handle karenge
+# Log API status (Render logs me dikhega)
+print(f"🔑 GROQ_API_KEY: {'✅ Found' if GROQ_API_KEY else '❌ Missing'}")
+print(f"🖼️ PEXELS_API_KEY: {'✅ Found' if PEXELS_API_KEY else '❌ Missing'}")
+
+# Initialize Groq client
 client = None
 if GROQ_API_KEY:
     try:
         client = Groq(api_key=GROQ_API_KEY)
-    except:
-        client = None
+        print("✅ Groq client initialized successfully")
+    except Exception as e:
+        print(f"❌ Groq init error: {e}")
+else:
+    print("❌ GROQ_API_KEY not found! Please add it in Render Environment Variables.")
 
 GROQ_FALLBACK_MODELS = [GROQ_MODEL, "llama-3.1-70b-versatile", "llama-3.1-8b-instant"]
 
@@ -83,41 +90,60 @@ LANGUAGE_EXAMPLES = {
     }
 }
 
-# ============ HELPER FUNCTIONS ============
-def normalize_lang_code(lang_code):
-    return lang_code if lang_code in LANGUAGES else 'english'
+SCRIPT_RANGES = {'hindi': r'[\u0900-\u097F]'}
+
+def uses_expected_script(text, lang_code):
+    if lang_code == 'english':
+        return True
+    pattern = SCRIPT_RANGES.get(lang_code)
+    if not pattern:
+        return True
+    script_chars = len(re.findall(pattern, text or ''))
+    letters = len(re.findall(r'[^\W\d_]', text or '', flags=re.UNICODE))
+    return script_chars >= 20 and (letters == 0 or script_chars / max(letters, 1) >= 0.35)
 
 def groq_text(prompt, system_prompt=None, json_mode=False):
     if not client:
-        return json.dumps({"error": "GROQ_API_KEY not configured"})
+        return json.dumps({"error": "GROQ_API_KEY not configured. Please add it in Render environment variables."})
     
     messages = []
     if system_prompt:
         messages.append({'role': 'system', 'content': system_prompt})
     messages.append({'role': 'user', 'content': prompt})
 
+    last_error = None
     for model in dict.fromkeys(GROQ_FALLBACK_MODELS):
-        try:
-            kwargs = {'model': model, 'temperature': 0.2, 'messages': messages}
-            if json_mode:
+        for use_json_mode in ([True, False] if json_mode else [False]):
+            kwargs = {
+                'model': model,
+                'temperature': 0.2,
+                'messages': messages
+            }
+            if use_json_mode:
                 kwargs['response_format'] = {'type': 'json_object'}
-            response = client.chat.completions.create(**kwargs)
-            return response.choices[0].message.content
-        except Exception as e:
-            continue
-    return json.dumps({"error": "All Groq models failed"})
+            try:
+                response = client.chat.completions.create(**kwargs)
+                return response.choices[0].message.content
+            except Exception as error:
+                last_error = error
+                continue
+
+    raise last_error if last_error else Exception("All Groq models failed")
+
+def normalize_lang_code(lang_code):
+    return lang_code if lang_code in LANGUAGES else 'english'
 
 def parse_json_object(text):
     try:
         return json.loads(text)
-    except:
+    except Exception:
         match = re.search(r'\{.*\}', text or '', re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except:
-                return None
-        return None
+        if not match:
+            return None
+        try:
+            return json.loads(match.group(0))
+        except Exception:
+            return None
 
 def recipe_from_structured(data, lang):
     labels = lang['labels']
@@ -127,12 +153,12 @@ def recipe_from_structured(data, lang):
     tip = str(data.get('chef_tip') or '').strip()
     cooking_time = str(data.get('cooking_time') or '').strip()
     servings = str(data.get('servings') or '').strip()
-    
+
     if not isinstance(ingredients, list):
         ingredients = [str(ingredients)]
     if not isinstance(instructions, list):
         instructions = [str(instructions)]
-    
+
     lines = [f"{labels['recipe_name']}: {title}", '', f"{labels['ingredients']}:"]
     lines.extend(f"- {str(item).strip()}" for item in ingredients if str(item).strip())
     lines.extend(['', f"{labels['instructions']}:"])
@@ -217,10 +243,13 @@ def get_recipe():
         if not user_input:
             return jsonify({'success': False, 'error': 'Please enter dish name!'})
         
+        if not client:
+            return jsonify({'success': False, 'error': 'GROQ API key not configured. Please add GROQ_API_KEY in Render environment variables.'})
+        
         examples = LANGUAGE_EXAMPLES.get(lang_code, LANGUAGE_EXAMPLES['english'])
         prompt = f"""Create a complete recipe for "{user_input}" in {lang['name']}.
 
-Critical language rule: {examples['script_rule']}
+Critical language rule: {examples['script_rule']} Translate the dish name and every recipe detail naturally.
 
 Return ONLY valid JSON with this exact shape:
 {{
@@ -232,12 +261,13 @@ Return ONLY valid JSON with this exact shape:
   "servings": "{examples['servings']}"
 }}
 
-All JSON values must be in {lang['name']} only. Do not mix languages."""
+All JSON values must be in {lang['name']} only. Do not mix languages.
+{lang['system_prompt']}"""
 
         system_message = f"You are a multilingual professional chef. {examples['script_rule']} Return strict JSON only."
         raw_recipe = groq_text(prompt, system_message, json_mode=True)
         structured_recipe = parse_json_object(raw_recipe)
-        
+
         if structured_recipe and 'error' not in structured_recipe:
             recipe_text = recipe_from_structured(structured_recipe, lang)
         else:
@@ -253,6 +283,7 @@ All JSON values must be in {lang['name']} only. Do not mix languages."""
         })
         
     except Exception as e:
+        print(f"Get recipe error: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/chat_with_recipe', methods=['POST'])
@@ -264,6 +295,9 @@ def chat_with_recipe():
         lang_code = normalize_lang_code(data.get('language') or session.get('language', 'english'))
         lang = LANGUAGES[lang_code]
         
+        if not client:
+            return jsonify({'success': False, 'error': 'GROQ API key not configured.'})
+        
         examples = LANGUAGE_EXAMPLES.get(lang_code, LANGUAGE_EXAMPLES['english'])
         prompt = f"""You are a cooking assistant.
 Recipe Context: {recipe_text[:800]}
@@ -274,7 +308,7 @@ Answer naturally and concisely in {lang['name']} as a helpful cooking assistant.
 {examples['script_rule']}
 {lang['system_prompt']}
 
-Keep answer under 100 words."""
+Keep answer under 150 words."""
 
         system_message = f"You are a multilingual cooking assistant. {examples['script_rule']}"
         reply = groq_text(prompt, system_message)
@@ -282,11 +316,12 @@ Keep answer under 100 words."""
         return jsonify({'success': True, 'reply': reply})
         
     except Exception as e:
+        print(f"Chat error: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)})
 
 # ============ RUN ============
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     print(f"\n🍳 FlavoraX Started on port {port}")
-    print(f"📍 Visit: http://localhost:{port}")
+    print(f"📍 Visit: https://flavorax.onrender.com")
     app.run(host='0.0.0.0', port=port, debug=False)
