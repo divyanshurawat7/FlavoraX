@@ -33,30 +33,14 @@ GROQ_FALLBACK_MODELS = [
 ]
 
 LANGUAGES = {
-    "english": {
-        "name": "English"
-    },
-    "hindi": {
-        "name": "हिन्दी"
-    }
+    "english": {"name": "English"},
+    "hindi": {"name": "हिन्दी"}
 }
 
 def normalize_lang_code(lang):
     return lang if lang in LANGUAGES else "english"
 
-def parse_json_object(text):
-    try:
-        return json.loads(text)
-    except:
-        match = re.search(r"\{.*\}", text or "", re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except:
-                return None
-        return None
-
-def groq_text(prompt, system_prompt=None, json_mode=False):
+def groq_text(prompt, system_prompt=None):
     messages = []
 
     if system_prompt:
@@ -74,18 +58,12 @@ def groq_text(prompt, system_prompt=None, json_mode=False):
 
     for model in GROQ_FALLBACK_MODELS:
         try:
-            kwargs = {
-                "model": model,
-                "temperature": 0.4,
-                "messages": messages
-            }
+            res = client.chat.completions.create(
+                model=model,
+                temperature=0.4,
+                messages=messages
+            )
 
-            if json_mode:
-                kwargs["response_format"] = {
-                    "type": "json_object"
-                }
-
-            res = client.chat.completions.create(**kwargs)
             return res.choices[0].message.content
 
         except Exception as e:
@@ -103,18 +81,15 @@ def get_dish_image(name):
         return None
 
     try:
-        url = "https://api.pexels.com/v1/search"
-
-        headers = {
-            "Authorization": PEXELS_API_KEY
-        }
-
-        params = {
-            "query": f"{clean_dish_query(name)} food",
-            "per_page": 1
-        }
-
-        r = requests.get(url, headers=headers, params=params, timeout=5)
+        r = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": PEXELS_API_KEY},
+            params={
+                "query": f"{clean_dish_query(name)} food",
+                "per_page": 1
+            },
+            timeout=5
+        )
 
         if r.status_code != 200:
             return None
@@ -146,6 +121,9 @@ def home():
 
 @app.route("/login")
 def login_page():
+    if "user" in session:
+        return redirect(url_for("home"))
+
     return render_template(
         "login.html",
         google_client_id=GOOGLE_CLIENT_ID
@@ -164,7 +142,8 @@ def google_client_login():
             "picture": data.get("picture", "")
         }
 
-        session["language"] = "english"
+        if "language" not in session:
+            session["language"] = "english"
 
         return jsonify({
             "success": True
@@ -183,9 +162,9 @@ def check_session():
     if "user" in session:
         return jsonify({
             "logged_in": True,
-            "user": session["user"]["name"],
-            "email": session["user"]["email"],
-            "picture": session["user"]["picture"],
+            "user": session["user"].get("name", ""),
+            "email": session["user"].get("email", ""),
+            "picture": session["user"].get("picture", ""),
             "language": session.get("language", "english")
         })
 
@@ -198,7 +177,7 @@ def check_session():
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/")
+    return redirect(url_for("login_page"))
 
 # ---------------- LANGUAGE ----------------
 
