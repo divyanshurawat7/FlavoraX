@@ -5,7 +5,6 @@ from groq import Groq
 import os
 import requests
 import re
-import json
 
 load_dotenv()
 
@@ -25,51 +24,33 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 client = Groq(api_key=GROQ_API_KEY)
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-GROQ_FALLBACK_MODELS = [
-    GROQ_MODEL,
-    "llama-3.1-70b-versatile",
-    "llama-3.1-8b-instant"
-]
+MODEL = "llama-3.3-70b-versatile"
 
 LANGUAGES = {
     "english": {"name": "English"},
-    "hindi": {"name": "हिन्दी"}
+    "hindi": {"name": "Hindi"}
 }
 
 def normalize_lang_code(lang):
     return lang if lang in LANGUAGES else "english"
 
-def groq_text(prompt, system_prompt=None):
-    messages = []
+def groq_text(prompt):
+    res = client.chat.completions.create(
+        model=MODEL,
+        temperature=0.4,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a professional chef AI."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
 
-    if system_prompt:
-        messages.append({
-            "role": "system",
-            "content": system_prompt
-        })
-
-    messages.append({
-        "role": "user",
-        "content": prompt
-    })
-
-    last_error = None
-
-    for model in GROQ_FALLBACK_MODELS:
-        try:
-            res = client.chat.completions.create(
-                model=model,
-                temperature=0.4,
-                messages=messages
-            )
-
-            return res.choices[0].message.content
-
-        except Exception as e:
-            last_error = e
-
-    raise last_error
+    return res.choices[0].message.content
 
 def clean_dish_query(name):
     dish = re.sub(r"[^a-zA-Z0-9\s-]", " ", name or "").lower()
@@ -83,7 +64,9 @@ def get_dish_image(name):
     try:
         r = requests.get(
             "https://api.pexels.com/v1/search",
-            headers={"Authorization": PEXELS_API_KEY},
+            headers={
+                "Authorization": PEXELS_API_KEY
+            },
             params={
                 "query": f"{clean_dish_query(name)} food",
                 "per_page": 1
@@ -122,7 +105,7 @@ def home():
 @app.route("/login")
 def login_page():
     if "user" in session:
-        return redirect(url_for("home"))
+        return redirect("/")
 
     return render_template(
         "login.html",
@@ -162,9 +145,9 @@ def check_session():
     if "user" in session:
         return jsonify({
             "logged_in": True,
-            "user": session["user"].get("name", ""),
-            "email": session["user"].get("email", ""),
-            "picture": session["user"].get("picture", ""),
+            "user": session["user"]["name"],
+            "email": session["user"]["email"],
+            "picture": session["user"]["picture"],
             "language": session.get("language", "english")
         })
 
@@ -177,14 +160,18 @@ def check_session():
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("login_page"))
+    return redirect("/login")
 
 # ---------------- LANGUAGE ----------------
 
 @app.route("/set_language", methods=["POST"])
 def set_language():
     data = request.get_json()
-    lang = normalize_lang_code(data.get("language", "english"))
+
+    lang = normalize_lang_code(
+        data.get("language", "english")
+    )
+
     session["language"] = lang
 
     return jsonify({
@@ -211,18 +198,31 @@ def get_recipe():
         )
 
         prompt = f"""
-Give full recipe for {dish} in {LANGUAGES[lang]['name']} language.
+Create recipe for {dish} in {LANGUAGES[lang]['name']}.
 
-Include:
-1. Recipe Name
-2. Ingredients
-3. Instructions
-4. Cooking Time
-5. Servings
-6. Chef Tip
+Return exactly in this format:
+
+Recipe Name: {dish}
+
+Ingredients:
+- item 1
+- item 2
+- item 3
+
+Instructions:
+1. step one
+2. step two
+3. step three
+
+Cooking Time: 30 minutes
+Servings: 4 people
+Chef Tip: short tip only
+
+No intro paragraph.
+No markdown.
 """
 
-        recipe = groq_text(prompt, "You are a professional chef AI.")
+        recipe = groq_text(prompt)
         image = get_dish_image(dish)
 
         return jsonify({
